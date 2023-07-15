@@ -1,0 +1,399 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: An amazing spherical Chameleon hunting a spherical insect.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: Availablity Zones
+        Parameters:
+          - AvailabilityZones
+      - Label: EC2 Configuration
+        Parameters:
+          - InstanceType
+          - KeyPair
+          - TheLatestAmi
+      - Label: Network Configuration
+        Parameters:
+          - VpcCidrBlock
+          - FirstPublicSubnetCidr
+          - SecondPublicSubnetCidr
+          - FirstPrivateSubnetCidr
+          - SecondPrivateSubnetCidr
+      - Label: AutoScaling Stuff
+        Parameters:
+          - AutoScalingTargetCpuPercentage
+Parameters:
+  TheLatestAmi:
+    Description: The latest Amazon Linux 2 AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t3.small
+      - t3.medium
+    Description: Enter t2.micro, t3.micro, t3.small or t3.medium. Default is t2.micro.
+  KeyPair:
+    Description: Name of an existing EC2 KeyPair.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+  AvailabilityZones:
+    Description: Select minimum of two availablity zones.
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+  VpcCidrBlock:
+    Description: VPC CIDR Block (eg 172.16.0.0/16)
+    ConstraintDescription: CIDR range is not valid! Must be in the form x.x.x.x/16-28
+    Default: 100.100.0.0/16
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+  FirstPublicSubnetCidr:
+    Description: Subnet CIDR (eg 172.16.100.0/24)
+    ConstraintDescription: CIDR range is not valid! Must be in the form x.x.x.x/16-28
+    Default: 100.100.0.0/24
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+  SecondPublicSubnetCidr:
+    Description: Subnet CIDR (eg 172.16.100.0/24)
+    ConstraintDescription: CIDR range is not valid! Must be in the form x.x.x.x/16-28
+    Default: 100.100.1.0/24
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+  FirstPrivateSubnetCidr:
+    Description: Subnet CIDR (eg 172.16.100.0/24)
+    ConstraintDescription: CIDR range is not valid! Must be in the form x.x.x.x/16-28
+    Default: 100.100.16.0/20
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+  SecondPrivateSubnetCidr:
+    Description: Subnet CIDR (eg 172.16.100.0/24)
+    ConstraintDescription: CIDR range is not valid! Must be in the form x.x.x.x/16-28
+    Default: 100.100.32.0/20
+    Type: String
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+  AutoScalingTargetCpuPercentage:
+    Description: CPU Percentage to git before auto scaling
+    ConstraintDescription: CPU percentage should be a two-digit number!
+    Type: String
+    AllowedPattern: ^[0-9]{1,2}$
+Mappings: {}
+Conditions: {}
+Resources:
+  ChameleonVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref 'VpcCidrBlock'
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      Tags:
+        - Key: Name
+          Value: ChameleonVPC
+        - Key: Project
+          Value: Chameleon
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref 'AvailabilityZones'
+      VpcId: !Ref 'ChameleonVPC'
+      CidrBlock: !Ref 'FirstPublicSubnetCidr'
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: PublicSubnetA
+        - Key: Project
+          Value: Chameleon
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - '1'
+        - !Ref 'AvailabilityZones'
+      VpcId: !Ref 'ChameleonVPC'
+      CidrBlock: !Ref 'SecondPublicSubnetCidr'
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: PublicSubnetB
+        - Key: Project
+          Value: Chameleon
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref 'AvailabilityZones'
+      VpcId: !Ref 'ChameleonVPC'
+      CidrBlock: !Ref 'FirstPrivateSubnetCidr'
+      Tags:
+        - Key: Name
+          Value: PrivateSubnetA
+        - Key: Project
+          Value: Chameleon
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - '1'
+        - !Ref 'AvailabilityZones'
+      VpcId: !Ref 'ChameleonVPC'
+      CidrBlock: !Ref 'SecondPrivateSubnetCidr'
+      Tags:
+        - Key: Name
+          Value: PrivateSubnetB
+        - Key: Project
+          Value: Chameleon
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: ChameleonInternetGateway
+        - Key: Project
+          Value: Chameleon
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref 'ChameleonVPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'ChameleonVPC'
+      Tags:
+        - Key: Name
+          Value: PublicRouteTableA
+        - Key: Project
+          Value: Chameleon
+  PublicRouteAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'PublicSubnetA'
+      RouteTableId: !Ref 'PublicRouteTableA'
+  PublicInternetRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTableA'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'ChameleonVPC'
+      Tags:
+        - Key: Name
+          Value: PublicRouteTableB
+        - Key: Project
+          Value: Chameleon
+  PublicRouteAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'PublicSubnetB'
+      RouteTableId: !Ref 'PublicRouteTableB'
+  PublicInternetRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTableB'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'ChameleonVPC'
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTableA
+        - Key: Project
+          Value: Chameleon
+  PrivateRouteAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'PrivateSubnetA'
+      RouteTableId: !Ref 'PrivateRouteTableA'
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'ChameleonVPC'
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTableB
+        - Key: Project
+          Value: Chameleon
+  PrivateRouteAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'PrivateSubnetB'
+      RouteTableId: !Ref 'PrivateRouteTableB'
+  InternetToAlb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: '-'
+      SecurityGroupIngress:
+        - CidrIp: '0.0.0.0/0'
+          Description: HTTP access from the Internet
+          FromPort: '80'
+          ToPort: '80'
+          IpProtocol: tcp
+        - CidrIp: '0.0.0.0/0'
+          Description: HTTPS access from the Internet
+          FromPort: '443'
+          ToPort: '443'
+          IpProtocol: tcp
+      VpcId: !Ref 'ChameleonVPC'
+      Tags:
+        - Key: Project
+          Value: Chameleon
+  AlbToEc2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: '-'
+      SecurityGroupIngress:
+        - Description: HTTP access from ALB
+          FromPort: '80'
+          ToPort: '80'
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref 'InternetToAlb'
+        - Description: HTTPS access from ALB
+          FromPort: '443'
+          ToPort: '443'
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref 'InternetToAlb'
+      VpcId: !Ref 'ChameleonVPC'
+      Tags:
+        - Key: Project
+          Value: Chameleon
+  ChameleonLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: ChameleonLaunchTemplate
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - Ebs:
+              VolumeSize: 8
+            DeviceName: /dev/sdf
+        ImageId: !Ref 'TheLatestAmi'
+        InstanceType: !Ref 'InstanceType'
+        KeyName: !Ref 'KeyPair'
+        SecurityGroupIds:
+          - !Ref 'AlbToEc2'
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Project
+                Value: Chameleon
+          - ResourceType: volume
+            Tags:
+              - Key: Project
+                Value: Chameleon
+        UserData: !Base64
+          Fn::Join:
+            - ''
+            - - "#!/bin/bash -xe\n"
+              - "yum update -y\n"
+              - "yum install -y httpd php\n"
+              - "cd /var/www/html\n"
+              - "wget https://github.com/awstrainings/SAA/raw/master/Module06/ALB/RoundChameleon.jpg\n"
+              - "mv RoundChameleon.jpg RoundAnimal.jpg\n"
+              - "wget https://github.com/awstrainings/SAA/raw/master/Module06/ALB/index.php\n"
+              - "systemctl start httpd\n"
+              - "systemctl enable httpd\n"
+              - "usermod -a -G apache ec2-user\n"
+              - "chown -R ec2-user:apache /var/www\n"
+              - "chmod 2775 /var/www && find /var/www -type d -exec sudo chmod 2775 {} \\;\n"
+              - "find /var/www -type f -exec sudo chmod 0664 {} \\;\n"
+              - "\n"
+  ChameleonAlbMain:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Name: ChameleonALB
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref 'InternetToAlb'
+      Subnets:
+        - !Ref 'PublicSubnetA'
+        - !Ref 'PublicSubnetB'
+      Tags:
+        - Key: Project
+          Value: Chameleon
+      Type: application
+  ChameleonAlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: 'true'
+      HealthCheckIntervalSeconds: '25'
+      HealthCheckPath: /index.php
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: '3'
+      HealthyThresholdCount: '3'
+      Name: ChameleonTargetGroup
+      Port: '80'
+      Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: Chameleon
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '60'
+        - Key: stickiness.enabled
+          Value: 'false'
+        - Key: load_balancing.algorithm.type
+          Value: round_robin
+      TargetType: instance
+      UnhealthyThresholdCount: '2'
+      VpcId: !Ref 'ChameleonVPC'
+  ChameleonAlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref 'ChameleonAlbTargetGroup'
+          Type: forward
+      LoadBalancerArn: !Ref 'ChameleonAlbMain'
+      Port: '80'
+      Protocol: HTTP
+  ChameleonAutoScaling:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ChameleonAutoScaling
+      AvailabilityZones:
+        - !Select
+          - '0'
+          - !Ref 'AvailabilityZones'
+        - !Select
+          - '1'
+          - !Ref 'AvailabilityZones'
+      Cooldown: '60'
+      DesiredCapacity: '2'
+      HealthCheckGracePeriod: '120'
+      HealthCheckType: ELB
+      LaunchTemplate:
+        LaunchTemplateId: !Ref 'ChameleonLaunchTemplate'
+        Version: !GetAtt 'ChameleonLaunchTemplate.LatestVersionNumber'
+      MaxSize: '4'
+      MinSize: '2'
+      Tags:
+        - Key: Project
+          Value: Chameleon
+          PropagateAtLaunch: 'true'
+      TargetGroupARNs:
+        - !Ref 'ChameleonAlbTargetGroup'
+      VPCZoneIdentifier:
+        - !Ref 'PublicSubnetA'
+        - !Ref 'PublicSubnetB'
+  ChameleonAutoScalingPolicies:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref 'ChameleonAutoScaling'
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        DisableScaleIn: 'false'
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !Ref 'AutoScalingTargetCpuPercentage'
+Outputs:
+  LoadBalancerDnsName:
+    Description: The DNS name to access the Chameleon Website!
+    Value: !Sub http://${ChameleonAlbMain.DNSName}
